@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Geometry Cube Runner</title>
+<style>
+  body {
+    margin: 0; 
+    background: linear-gradient(to bottom, #87ceeb, #1e90ff);
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    user-select: none;
+  }
+  #gameCanvas {
+    background: #70c5ce;
+    display: block;
+    margin: 0 auto;
+    border: 3px solid #333;
+    border-radius: 10px;
+  }
+  #score, #coinsCount {
+    position: absolute;
+    top: 10px;
+    color: white;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+    font-size: 20px;
+    user-select: none;
+  }
+  #score {
+    left: 10px;
+  }
+  #coinsCount {
+    left: 150px;
+  }
+</style>
+</head>
+<body>
+
+<div id="score">Pontos: 0</div>
+<div id="coinsCount">Moedas: 0</div>
+
+<canvas id="gameCanvas" width="900" height="400"></canvas>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // Áudios
+  const bgMusic = new Audio('https://cdn.pixabay.com/download/audio/2022/03/26/audio_0c16aa7a55.mp3?filename=summer-joy-11241.mp3');
+  bgMusic.loop = true;
+  bgMusic.volume = 0.3;
+  bgMusic.preload = 'auto';
+
+  const gameOverSound = new Audio('https://freesound.org/data/previews/387/387424_2205790-lq.mp3');
+  gameOverSound.volume = 0.7;
+  gameOverSound.preload = 'auto';
+
+  // Estado do jogo
+  let gameStarted = false;
+  let gameOver = false;
+  let gameOverSoundPlayed = false;
+
+  // Jogador
+  const player = {
+    x: 50,
+    y: 0,
+    width: 40,
+    height: 40,
+    color: '#ff5722',
+    dy: 0,
+    gravity: 0.8,
+    jumpPower: 15,
+    grounded: false,
+  };
+
+  // Chão e fundo
+  const groundHeight = 80;
+  let bgX = 0;
+  const bgSpeed = 3;
+
+  // Obstáculos
+  let obstacles = [];
+  let obstacleFrequency = 90; 
+  let frameCount = 0;
+
+  // Moedas
+  let coins = [];
+  let coinFrequency = 150;
+
+  // Pontuação
+  let score = 0;
+  let coinsCollected = 0;
+
+  // Elementos DOM
+  const scoreDiv = document.getElementById('score');
+  const coinsDiv = document.getElementById('coinsCount');
+
+  // Controle teclado
+  document.addEventListener('keydown', (e) => {
+    if (!gameStarted && e.code === 'Space') {
+      gameStarted = true;
+      bgMusic.play();
+      loop();
+    } else if ((e.code === 'Space' || e.code === 'ArrowUp') && player.grounded && !gameOver && gameStarted) {
+      player.dy = -player.jumpPower;
+      player.grounded = false;
+    }
+    if (gameOver && e.code === 'Enter') {
+      restartGame();
+      gameStarted = true;
+    }
+  });
+
+  function restartGame() {
+    obstacles = [];
+    coins = [];
+    player.y = 0;
+    player.dy = 0;
+    player.grounded = false;
+    score = 0;
+    coinsCollected = 0;
+    frameCount = 0;
+    gameOver = false;
+    gameOverSoundPlayed = false;
+    obstacleFrequency = 90;
+
+    bgMusic.currentTime = 0;
+    bgMusic.play();
+    loop();
+  }
+
+  function createObstacle() {
+    const type = Math.random() < 0.5 ? 'high' : 'low';
+    if (type === 'high') {
+      const height = Math.floor(Math.random() * 60) + 30;
+      obstacles.push({
+        x: canvas.width + 20,
+        y: canvas.height - groundHeight - height,
+        width: 20,
+        height: height,
+        color: '#007700',
+        speed: bgSpeed + 3,
+      });
+    } else {
+      obstacles.push({
+        x: canvas.width + 20,
+        y: canvas.height - groundHeight - 20,
+        width: 40,
+        height: 20,
+        color: '#990000',
+        speed: bgSpeed + 3,
+      });
+    }
+  }
+
+  function createCoin() {
+    const yPositions = [
+      canvas.height - groundHeight - 60,
+      canvas.height - groundHeight - 120,
+      canvas.height - groundHeight - 30,
+    ];
+    coins.push({
+      x: canvas.width + 20,
+      y: yPositions[Math.floor(Math.random() * yPositions.length)],
+      size: 20,
+      color: 'yellow',
+      speed: bgSpeed + 3,
+    });
+  }
+
+  function update() {
+    if (!gameStarted || gameOver) return;
+
+    frameCount++;
+    score = Math.floor(frameCount / 5);
+
+    scoreDiv.textContent = 'Pontos: ' + score;
+    coinsDiv.textContent = 'Moedas: ' + coinsCollected;
+
+    // Fundo movendo
+    bgX -= bgSpeed;
+    if (bgX <= -canvas.width) bgX = 0;
+
+    // Criar obstáculos
+    if (frameCount % obstacleFrequency === 0) {
+      createObstacle();
+      if (obstacleFrequency > 40) obstacleFrequency--;
+    }
+
+    // Criar moedas
+    if (frameCount % coinFrequency === 0) {
+      createCoin();
+    }
+
+    // Atualizar jogador
+    player.dy += player.gravity;
+    player.y += player.dy;
+
+    // Colisão com chão
+    if (player.y + player.height >= canvas.height - groundHeight) {
+      player.y = canvas.height - groundHeight - player.height;
+      player.dy = 0;
+      player.grounded = true;
+    }
+
+    // Atualizar obstáculos
+    obstacles.forEach((obs, index) => {
+      obs.x -= obs.speed;
+      if (obs.x + obs.width < 0) obstacles.splice(index, 1);
+
+      // Colisão com jogador
+      if (
+        player.x < obs.x + obs.width &&
+        player.x + player.width > obs.x &&
+        player.y < obs.y + obs.height &&
+        player.y + player.height > obs.y
+      ) {
+        if (!gameOver) {
+          gameOver = true;
+          bgMusic.pause();
+        }
+      }
+    });
+
+    // Atualizar moedas
+    coins.forEach((coin, index) => {
+      coin.x -= coin.speed;
+      if (coin.x + coin.size < 0) coins.splice(index, 1);
+
+      // Colisão com jogador (coletar moeda)
+      if (
+        player.x < coin.x + coin.size &&
+        player.x + player.width > coin.x &&
+        player.y < coin.y + coin.size &&
+        player.y + player.height > coin.y
+      ) {
+        coins.splice(index, 1);
+        coinsCollected++;
+      }
+    });
+  }
+
+  function playGameOverSoundOnce() {
+    if (gameOver && !gameOverSoundPlayed) {
+      gameOverSoundPlayed = true;
+      gameOverSound.currentTime = 0;
+      gameOverSound.play();
+    }
+  }
+
+  function drawBackground() {
+    ctx.fillStyle = '#70c5ce';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
+
+    ctx.strokeStyle = '#4b2e0e';
+    ctx.lineWidth = 3;
+    for(let i=bgX % 40; i < canvas.width; i += 40) {
+      ctx.beginPath();
+      ctx.moveTo(i, canvas.height - groundHeight);
+      ctx.lineTo(i, canvas.height - groundHeight + 20);
+      ctx.stroke();
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!gameStarted) {
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'white';
+      ctx.font = '48px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Geometry Cube Runner', canvas.width / 2, canvas.height / 2 - 40);
+      ctx.font = '24px Arial';
+      ctx.fillText('Pressione Espaço para começar', canvas.width / 2, canvas.height / 2 + 20);
+      return;
+    }
+
+    drawBackground();
+
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    obstacles.forEach((obs) => {
+      ctx.fillStyle = obs.color;
+      ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+    });
+
+    coins.forEach((coin) => {
+      ctx.fillStyle = coin.color;
+      ctx.beginPath();
+      ctx.arc(coin.x + coin.size/2, coin.y + coin.size/2, coin.size/2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(coin.x + coin.size/3, coin.y + coin.size/3, coin.size/4, 0, Math.PI*2);
+      ctx.stroke();
+    });
+
+    ctx.fillStyle = 'white';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('Pontos: ' + score, 20, 30);
+    ctx.fillText('Moedas: ' + coinsCollected, 20, 55);
+
+    if (gameOver) {
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'white';
+      ctx.font = '64px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 20);
+      ctx.font = '28px Arial';
+      ctx.fillText('Pressione Enter para reiniciar', canvas.width / 2, canvas.height / 2 + 40);
+    }
+  }
+
+  function loop() {
+    update();
+    draw();
+    playGameOverSoundOnce();
+
+    if (!gameOver && gameStarted) {
+      requestAnimationFrame(loop);
+    }
+  }
+
+  draw();
+
+</script>
+
+</body>
+</html>
